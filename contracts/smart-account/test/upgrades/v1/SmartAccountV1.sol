@@ -134,14 +134,20 @@ contract SmartAccountV1 is
      * @dev Allows to change the owner of the smart account by current owner or self-call (modules)
      * @param _newOwner Address of the new signatory
      */
+    // このコントラクト（スマートアカウント）の所有者を変えるメソッド（リカバリーから呼び出される）
+    // checkSignaturesなどでownerのみの制限があるからownerを変えるだけでリカバリーになる
     function setOwner(address _newOwner) public mixedAuth {
+        // 新しいオーナーアドレスのバリデーション
         if (_newOwner == address(0)) revert OwnerCannotBeZero();
         if (_newOwner == address(this)) revert OwnerCanNotBeSelf();
         if (_newOwner == owner) revert OwnerProvidedIsSame();
+        // 元のオーナーを保存
         address oldOwner = owner;
+        // owner = _newOwnerでも同じ結果になるがアセンブリ命令を使用
         assembly {
             sstore(owner.slot, _newOwner)
         }
+        // アカウントの所有者変更イベント
         emit EOAChanged(address(this), oldOwner, _newOwner);
     }
 
