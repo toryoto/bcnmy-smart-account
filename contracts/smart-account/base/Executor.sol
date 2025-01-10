@@ -4,6 +4,9 @@ pragma solidity 0.8.17;
 import {Enum} from "../common/Enum.sol";
 
 /// @title Executor - A contract that can execute transactions
+// モジュール内メソッドなどを実行する抽象化されたメソッド
+// トランザクションを実行してその結果可否を返し、ModuleManager.solなどで使用される
+// callとdelegatecallは、与えられたdataを元にトランザクションを実行する
 abstract contract Executor {
     // Could add a flag fromEntryPoint for AA txn
     event ExecutionFailure(

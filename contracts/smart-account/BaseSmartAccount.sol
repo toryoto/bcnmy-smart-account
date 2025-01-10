@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.17;
 
+// IAccountは、アカウント抽象化におけるスマートコントラクトウォレットが満たすべき最低限の機能
+// これを継承してvalidateUserOpやentryPointを実装していればERC4337のSCAにできる
 import {IAccount} from "@account-abstraction/contracts/interfaces/IAccount.sol";
 import {IEntryPoint} from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {UserOperationLib, UserOperation} from "@account-abstraction/contracts/interfaces/UserOperation.sol";
@@ -12,6 +14,9 @@ import "@account-abstraction/contracts/core/Helpers.sol";
  * This contract provides the basic logic for implementing the IAccount interface: validateUserOp function
  * Specific account implementation should inherit it and provide the account-specific logic
  */
+ 
+ // スマートコントラクトアカウントの基本的な機能を提供する基底クラス
+ // validationUserOpやentryPointといった重要な関数を抽象定義している（実装はSmartAccount.sol）
 abstract contract BaseSmartAccount is IAccount, BaseSmartAccountErrors {
     using UserOperationLib for UserOperation;
 

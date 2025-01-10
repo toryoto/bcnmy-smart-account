@@ -21,9 +21,18 @@ import {IAuthorizationModule} from "./interfaces/IAuthorizationModule.sol";
  *         - The Smart Account can be extended with modules, such as Social Recovery, Session Key and others.
  * @author Chirag Titiya - <chirag@biconomy.io>, Filipp Makarov - <filipp.makarov@biconomy.io>
  */
+// ERC4337トランザクション処理流れ
+// ユーザ（スマートアカウントを含む）がUserOpを作成
+// バンドラーがまとめてEntryPointに送信
+// EntryPointがUserOperatioの検証を開始
+// EntryPointがスマートアカウントのvalidateUserOpを呼び出し
+// スマートアカウントが検証結果をEntryPointに返す
+// EntryPointが検証結果に基づいて処理を続行
+
+// スマートアカウントがModuleManagerを継承することでモジュール管理とその使用ができるようになる
 contract SmartAccount is
     BaseSmartAccount,
-    ModuleManager,
+    ModuleManager, 
     FallbackManager,
     IERC165,
     SmartAccountErrors,
@@ -133,19 +142,26 @@ contract SmartAccount is
         executeBatch_y6U(dest, value, func);
     }
 
+    // ERC4337のUserOperationを検証するためのロジックを実装
+    // スマートアカウントがEntryPoint(EOA)の依頼を受けて行う検証処理
     function validateUserOp(
         UserOperation calldata userOp,
         bytes32 userOpHash,
         uint256 missingAccountFunds
     ) external virtual override returns (uint256 validationData) {
+        // エントリーポイントからの呼び出しか確認
+        // → ERC4337において、userOpの検証実行はentryPoint(EOA)からのみ呼び出される
         if (msg.sender != address(entryPoint()))
             revert CallerIsNotAnEntryPoint(msg.sender);
 
+        // 署名をデコードして署名データと検証モジュールのアドレスを取得
         (, address validationModule) = abi.decode(
             userOp.signature,
             (bytes, address)
         );
+        // 指定された validationModule が有効かどうかを確認
         if (address(_modules[validationModule]) != address(0)) {
+            // 有効であればvalidationModule の validateUserOp 関数を呼び出す
             validationData = IAuthorizationModule(validationModule)
                 .validateUserOp(userOp, userOpHash);
         } else {
@@ -161,9 +177,10 @@ contract SmartAccount is
      * @notice Enables the module `module` for the wallet.
      * @param module Module to be allow-listed.
      */
+     // シンプルなモジュール追加に使う
     function enableModule(address module) external virtual override {
-        _requireFromEntryPointOrSelf();
-        _enableModule(module);
+        _requireFromEntryPointOrSelf(); // entryPointまたは自分からの呼び出しであることを確認
+        _enableModule(module); // 内部関数で指定されたモジュールを有効化
     }
 
     /**
@@ -171,6 +188,7 @@ contract SmartAccount is
      * @notice This can only be done via userOp or a selfcall.
      * @notice Enables the module `module` for the wallet.
      */
+     // モジュールが初期設定を必要する場合に使用（例：モジュールが特定のパラメータなどを必要とする）
     function setupAndEnableModule(
         address setupContract,
         bytes memory setupData

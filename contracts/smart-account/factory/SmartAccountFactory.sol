@@ -12,6 +12,13 @@ import {Stakeable} from "../common/Stakeable.sol";
  *      This allows keeping the same address for the same Smart Account owner on various chains via CREATE2
  * @author Chirag Titiya - <chirag@biconomy.io>
  */
+
+ // ファクトリーコントラクトがユーザに変わってウォレットコントラクトをデプロイする
+ // ファクトリーコントラクトのアドレスやナンスなどから一意のアドレスが生成される
+ // ソーシャルログインではソーシャルアカウントの認証情報などから署名を生成して、ファクトリーコントラクトにウォレットの作成を依頼する
+ // CREATE2を使用するとデプロイ時に入力値が同じであれば、出力値が必ず同じになる
+ // よって、1度アカウントを作成（デプロイ）すると、その情報を使用して2回目以降でも異なるチェーンでも同じウォレットアドレスを使用できるようになる
+ // （スマートコントラクトウォレットのウォレットアドレスは、そのスマートコントラクトのデプロイアドレスだから予測可能だと同じアカウント使える
 contract SmartAccountFactory is Stakeable {
     address public immutable basicImplementation;
     DefaultCallbackHandler public immutable minimalHandler;

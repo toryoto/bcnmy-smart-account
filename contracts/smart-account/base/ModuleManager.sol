@@ -9,12 +9,18 @@ import {ModuleManagerErrors} from "../common/Errors.sol";
  * @title Module Manager - A contract that manages modules that can execute transactions
  *        on behalf of the Smart Account via this contract.
  */
+ // スマートアカウントに機能を追加するためのモジュール（リカバリーモジュールなど他のコントラクト）の追加、削除、および実行を管理
+ // モジュールはリンクリストで管理
+ // 根底の仕組みは execTransactionFromModule がモジュール内のメソッドを実行することにあり、その結果として、元のスマートアカウントがそのモジュールのメソッドを実行しているように見える
 abstract contract ModuleManager is
     SelfAuthorized,
     Executor,
     ModuleManagerErrors
 {
+    // リンクリストの終端を表すアドレス
     address internal constant SENTINEL_MODULES = address(0x1);
+    // モジュールはリンクリストとして管理されており、_modulesマッピングで管理されている
+    // キー：現在のモジュールアドレス、値：次のモジュールアドレス
     mapping(address => address) internal _modules;
     uint256[24] private __gap;
 
@@ -87,6 +93,7 @@ abstract contract ModuleManager is
      * @param data Data payload of module transaction.
      * @param operation Operation type of module transaction.
      */
+     // 有効化されたモジュール（リンクリストに含まれるモジュール）がスマートアカウントの代わりにトランザクションを実行することを許可するメソッド
     function execTransactionFromModule(
         address to,
         uint256 value,
@@ -94,12 +101,13 @@ abstract contract ModuleManager is
         Enum.Operation operation,
         uint256 txGas
     ) public virtual returns (bool success) {
-        // Only whitelisted modules are allowed.
+        // 有効化されたモジュールのみが実行可能
         if (
             msg.sender == SENTINEL_MODULES || _modules[msg.sender] == address(0)
         ) revert ModuleNotEnabled(msg.sender);
-        // Execute transaction without further confirmations.
-        // Can add guards here to allow delegatecalls for selected modules (msg.senders) only
+        // モジュールが有効化されていれば、スマートアカウントの所有者の介入なしにトランザクションを実行可能
+        // _executeの戻り値（成功可否）がそのまま返される
+        // _executeには送信者アドレスやABIに基づいたコントラクトのメソッドを呼び出すためのエンコード済みのデータなど、トランザクション実行に必要なものが渡される
         success = _execute(
             to,
             value,
@@ -109,6 +117,9 @@ abstract contract ModuleManager is
         );
     }
 
+    // 1つ目のexecTransactionFromModuleをオーバーロードして使用する
+    // これにより、同じ機能を異なる使い方で提供できる
+    // 1つ目：ガス代を細かく制御、2つ目：デフォルトのガス代で呼び出す
     function execTransactionFromModule(
         address to,
         uint256 value,
@@ -207,15 +218,16 @@ abstract contract ModuleManager is
      * @notice Enables the module `module` for the wallet.
      * @param module Module to be allow-listed.
      */
+     // モジュールを許可リストに追加する内部関数
     function _enableModule(address module) internal virtual {
-        // Module address cannot be null or sentinel.
+        // モジュールアドレスが0またはSENTINEL_MODULES出ないことを確認
         if (module == address(0) || module == SENTINEL_MODULES)
             revert ModuleCannotBeZeroOrSentinel(module);
-        // Module cannot be added twice.
+        // 指定されたモジュールがすでに有効化されていないことを確認
         if (_modules[module] != address(0)) revert ModuleAlreadyEnabled(module);
 
         _modules[module] = _modules[SENTINEL_MODULES];
-        _modules[SENTINEL_MODULES] = module;
+        _modules[SENTINEL_MODULES] = module; //リンクリストの終点が新しいモジュールを指すように更新
 
         emit EnabledModule(module);
     }
@@ -260,6 +272,8 @@ abstract contract ModuleManager is
 
     // TODO: can use not executor.execute, but SmartAccount._call for the unification
 
+    // バッチトランザクション内で各々を実行するための内部関数
+    // execTransactionFromModuleとやっていることは同じだが、内部関数のため有効性チェックは不要
     function _executeFromModule(
         address to,
         uint256 value,
