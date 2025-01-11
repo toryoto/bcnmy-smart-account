@@ -13,13 +13,17 @@ import {Stakeable} from "../common/Stakeable.sol";
  * @author Chirag Titiya - <chirag@biconomy.io>
  */
 
- // ファクトリーコントラクトがユーザに変わってウォレットコントラクトをデプロイする
+ // ファクトリーコントラクトがユーザに変わってウォレットコントラクト（Proxy）をデプロイする
  // ファクトリーコントラクトのアドレスやナンスなどから一意のアドレスが生成される
  // ソーシャルログインではソーシャルアカウントの認証情報などから署名を生成して、ファクトリーコントラクトにウォレットの作成を依頼する
  // CREATE2を使用するとデプロイ時に入力値が同じであれば、出力値が必ず同じになる
  // よって、1度アカウントを作成（デプロイ）すると、その情報を使用して2回目以降でも異なるチェーンでも同じウォレットアドレスを使用できるようになる
  // （スマートコントラクトウォレットのウォレットアドレスは、そのスマートコントラクトのデプロイアドレスだから予測可能だと同じアカウント使える
 contract SmartAccountFactory is Stakeable {
+    // Proxyが参照するロジックコントラクトのアドレス
+    // 全てのProxyはbasicImplementationを通じてスマートアカウントのロジックを実行する
+    // 全てのProxyが同じbasicImplementationを参照するため、ロジックコードを一回だけデプロイすれば済む
+    // 各Proxyは独自のストレージを持つため、独立したウォレットとして機能する
     address public immutable basicImplementation;
     DefaultCallbackHandler public immutable minimalHandler;
 
@@ -49,6 +53,7 @@ contract SmartAccountFactory is Stakeable {
      * @notice Allows to find out account address prior to deployment
      * @param index extra salt that allows to deploy more accounts if needed for same EOA (default 0)
      */
+    // CREATE2によって生成されるアドレス（デプロイされたアドレス）を計算するメソッド
     function getAddressForCounterFactualAccount(
         address moduleSetupContract,
         bytes calldata moduleSetupData,
@@ -72,30 +77,33 @@ contract SmartAccountFactory is Stakeable {
         _account = address(uint160(uint256(hash)));
     }
 
-    /**
-     * @notice Deploys account using create2 and points it to basicImplementation
-     *
-     * @param index extra salt that allows to deploy more account if needed for same EOA (default 0)
-     */
+    // CREATE2 opcodeを使用して、事前に決定可能なアドレスにスマートアカウントをデプロイする
+    // 戻り値：デプロイされたスマートアカウント（Proxyコントラクト）のアドレス
     function deployCounterFactualAccount(
         address moduleSetupContract,
         bytes calldata moduleSetupData,
         uint256 index
     ) public returns (address proxy) {
-        // create initializer data based on init method and parameters
+        // スマートアカウントの初期化に必要なデータを生成
         bytes memory initializer = _getInitializer(
             moduleSetupContract,
             moduleSetupData
         );
+        // CREATE2で使用するソルトを生成
+        // 初期化データのハッシュとindexを連結してハッシュ化することで生成する
+        // このindexによって同じ初期化データでも異なるアドレスを生成することが可能
         bytes32 salt = keccak256(
             abi.encodePacked(keccak256(initializer), index)
         );
 
+        // デプロイに必要なデータを生成
+        // Proxyコントラクトの作成コードとスマートアカウントの実装コードを含む
         bytes memory deploymentData = abi.encodePacked(
             type(Proxy).creationCode,
             uint256(uint160(basicImplementation))
         );
 
+        // インラインアセンブリを使用してCREATE2 opcodeを呼び出してデプロイ
         assembly {
             proxy := create2(
                 0x0,
@@ -127,6 +135,7 @@ contract SmartAccountFactory is Stakeable {
                 initialAuthorizationModule := mload(ptr)
             }
         }
+        // アカウント作成のイベント発行
         emit AccountCreation(proxy, initialAuthorizationModule, index);
     }
 
