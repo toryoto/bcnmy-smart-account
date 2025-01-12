@@ -6,13 +6,6 @@ import "../BaseSmartAccount.sol";
 import {DefaultCallbackHandler} from "../handler/DefaultCallbackHandler.sol";
 import {Stakeable} from "../common/Stakeable.sol";
 
-/**
- * @title Smart Account Factory - factory responsible for deploying Smart Accounts using CREATE2 and CREATE
- * @dev It deploys Smart Accounts as proxies pointing to `basicImplementation` that is immutable.
- *      This allows keeping the same address for the same Smart Account owner on various chains via CREATE2
- * @author Chirag Titiya - <chirag@biconomy.io>
- */
-
  // ファクトリーコントラクトがユーザに変わってウォレットコントラクト（Proxy）をデプロイする
  // ファクトリーコントラクトのアドレスやナンスなどから一意のアドレスが生成される
  // ソーシャルログインではソーシャルアカウントの認証情報などから署名を生成して、ファクトリーコントラクトにウォレットの作成を依頼する
@@ -20,7 +13,7 @@ import {Stakeable} from "../common/Stakeable.sol";
  // よって、1度アカウントを作成（デプロイ）すると、その情報を使用して2回目以降でも異なるチェーンでも同じウォレットアドレスを使用できるようになる
  // （スマートコントラクトウォレットのウォレットアドレスは、そのスマートコントラクトのデプロイアドレスだから予測可能だと同じアカウント使える
 contract SmartAccountFactory is Stakeable {
-    // Proxyが参照するロジックコントラクトのアドレス
+    // Proxyが参照するロジックコントラクトのアドレス（Smart Account.solのデプロイアドレス）
     // 全てのProxyはbasicImplementationを通じてスマートアカウントのロジックを実行する
     // 全てのProxyが同じbasicImplementationを参照するため、ロジックコードを一回だけデプロイすれば済む
     // 各Proxyは独自のストレージを持つため、独立したウォレットとして機能する
@@ -49,11 +42,9 @@ contract SmartAccountFactory is Stakeable {
         minimalHandler = new DefaultCallbackHandler();
     }
 
-    /**
-     * @notice Allows to find out account address prior to deployment
-     * @param index extra salt that allows to deploy more accounts if needed for same EOA (default 0)
-     */
     // CREATE2によって生成されるアドレス（デプロイされたアドレス）を計算するメソッド
+    // デプロイ前にアカウントのアドレスを取得できる
+    // アドレス作成に必要なindexはソーシャルログインの場合、googleアカウントのuserIdなどが使える
     function getAddressForCounterFactualAccount(
         address moduleSetupContract,
         bytes calldata moduleSetupData,
@@ -80,8 +71,8 @@ contract SmartAccountFactory is Stakeable {
     // CREATE2 opcodeを使用して、事前に決定可能なアドレスにスマートアカウントをデプロイする
     // 戻り値：デプロイされたスマートアカウント（Proxyコントラクト）のアドレス
     function deployCounterFactualAccount(
-        address moduleSetupContract,
-        bytes calldata moduleSetupData,
+        address moduleSetupContract, // モジュール管理のコントラクトアドレス（ModuleManager.sol）
+        bytes calldata moduleSetupData, // moduleSetupContractに渡すcalldata
         uint256 index
     ) public returns (address proxy) {
         // スマートアカウントの初期化に必要なデータを生成

@@ -11,16 +11,8 @@ import {SmartAccountErrors} from "./common/Errors.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IAuthorizationModule} from "./interfaces/IAuthorizationModule.sol";
 
-/**
- * @title SmartAccount - EIP-4337 compatible smart contract wallet.
- * @dev This contract is the base for the Smart Account functionality.
- *         - It is modular by nature. UserOp and txns validation happens in Authorization Modules.
- *         - It provides the functionality to execute AA (EIP-4337) userOps. Gnosis style txns removed to a module.
- *         - It allows to receive and manage assets.
- *         - It is responsible for managing the modules and fallbacks.
- *         - The Smart Account can be extended with modules, such as Social Recovery, Session Key and others.
- * @author Chirag Titiya - <chirag@biconomy.io>, Filipp Makarov - <filipp.makarov@biconomy.io>
- */
+// SmartAccount - EIP-4337 compatible smart contract wallet.
+
 // ERC4337トランザクション処理流れ
 // ユーザ（スマートアカウントを含む）がUserOpを作成
 // バンドラーがまとめてEntryPointに送信
@@ -30,6 +22,7 @@ import {IAuthorizationModule} from "./interfaces/IAuthorizationModule.sol";
 // EntryPointが検証結果に基づいて処理を続行
 
 // スマートアカウントがModuleManagerを継承することでモジュール管理とその使用ができるようになる
+// Solidityでは継承元のストレージ（_modulesなど）は継承先（SmartAccount）のストレージに統合される
 contract SmartAccount is
     BaseSmartAccount,
     ModuleManager, 
@@ -66,16 +59,13 @@ contract SmartAccount is
         uint256 indexed value
     );
 
-    /**
-     * @dev Constructor that sets the entry point contract.
-     *      _modules[SENTINEL_MODULES] = SENTINEL_MODULES protects implementation from initialization
-     * @param anEntryPoint The address of the entry point contract.
-     */
     constructor(IEntryPoint anEntryPoint) {
         SELF = address(this);
         if (address(anEntryPoint) == address(0))
             revert EntryPointCannotBeZero();
+        // 引数として渡されたEntryPointを保存する
         ENTRY_POINT = anEntryPoint;
+        // 継承元（ModuleManager.sol）の_modulesを初期化する
         _modules[SENTINEL_MODULES] = SENTINEL_MODULES;
     }
 
@@ -90,17 +80,8 @@ contract SmartAccount is
         emit SmartAccountReceivedNativeToken(msg.sender, msg.value);
     }
 
-    /**
-     * @dev Initialize the Smart Account with required states
-     * @param handler Default fallback handler provided in Smart Account
-     * @param moduleSetupContract Contract, that setups initial auth module for this smart account.
-     * It can be a module factory or a registry module that serves several smart accounts
-     * @param moduleSetupData modules setup data (a standard calldata for the module setup contract)
-     * @notice devs need to make sure it is only callable once by initializer or state check restrictions
-     * @notice any further implementations that introduces a new state must have a reinit method
-     * @notice reinitialization is not possible, as _initialSetupModules reverts if the account is already initialized
-     *         which is when there is at least one enabled module
-     */
+     // スマートアカウントを初期化するためのメソッド
+     // 1度しか実行できないようにするべき
     function init(
         address handler,
         address moduleSetupContract,
@@ -114,26 +95,16 @@ contract SmartAccount is
         return _initialSetupModules(moduleSetupContract, moduleSetupData);
     }
 
-    /**
-     * @dev Interface function with the standard name for execute_ncC
-     * @param dest Address of the contract to call
-     * @param value Amount of native tokens to send along with the transaction
-     * @param func Data of the transaction
-     */
+    // コントラクト内で外部のコントラクトやアドレスに対してトランザクションを実行するためのインターフェイスメソッド
     function execute(
-        address dest,
-        uint256 value,
-        bytes calldata func
+        address dest, // トランザクションの送信先アドレス
+        uint256 value, // 送信するネイティブトークン量
+        bytes calldata func // 実行するトランザクションのcalldata
     ) external {
         execute_ncC(dest, value, func);
     }
 
-    /**
-     * @dev Interface function with the standard name for executeBatch_y6U
-     * @param dest Addresses of the contracts to call
-     * @param value Amounts of native tokens to send along with the transactions
-     * @param func Data of the transactions
-     */
+    // バッチトランザクションを実行するためのインターフェイスメソッド
     function executeBatch(
         address[] calldata dest,
         uint256[] calldata value,
@@ -159,9 +130,9 @@ contract SmartAccount is
             userOp.signature,
             (bytes, address)
         );
-        // 指定された validationModule が有効かどうかを確認
+        // 指定されたvalidationModuleが有効かどうかを確認
         if (address(_modules[validationModule]) != address(0)) {
-            // 有効であればvalidationModule の validateUserOp 関数を呼び出す
+            // 有効であればvalidationModuleのvalidateUserOp関数を呼び出す
             validationData = IAuthorizationModule(validationModule)
                 .validateUserOp(userOp, userOpHash);
         } else {
@@ -171,24 +142,13 @@ contract SmartAccount is
         _payPrefund(missingAccountFunds);
     }
 
-    /**
-     * @dev Adds a module to the allowlist.
-     * @notice This can only be done via a userOp or a selfcall.
-     * @notice Enables the module `module` for the wallet.
-     * @param module Module to be allow-listed.
-     */
-     // シンプルなモジュール追加に使う
+    // シンプルなモジュール追加に使う
     function enableModule(address module) external virtual override {
         _requireFromEntryPointOrSelf(); // entryPointまたは自分からの呼び出しであることを確認
         _enableModule(module); // 内部関数で指定されたモジュールを有効化
     }
 
-    /**
-     * @dev Setups module for this Smart Account and enables it.
-     * @notice This can only be done via userOp or a selfcall.
-     * @notice Enables the module `module` for the wallet.
-     */
-     // モジュールが初期設定を必要する場合に使用（例：モジュールが特定のパラメータなどを必要とする）
+    // モジュールが初期設定を必要する場合に使用（例：モジュールが特定のパラメータなどを必要とする）
     function setupAndEnableModule(
         address setupContract,
         bytes memory setupData
@@ -253,13 +213,7 @@ contract SmartAccount is
 
     /* solhint-disable func-name-mixedcase */
 
-    /**
-     * @dev Execute a transaction (called by entryPoint)
-     * @notice Name is optimized for this method to be cheaper to be called
-     * @param dest Address of the contract to call
-     * @param value Amount of native tokens to send along with the transaction
-     * @param func Data of the transaction
-     */
+    // EntryPointからの呼び出しであることを確認して、実行（call）する
     function execute_ncC(
         address dest,
         uint256 value,
@@ -371,14 +325,9 @@ contract SmartAccount is
         }
     }
 
-    /**
-     * @dev internal method that fecilitates the extenral calls from SmartAccount
-     * @dev similar to execute() of Executor.sol
-     * @param target destination address contract/non-contract
-     * @param value amount of native tokens
-     * @param data function singature of destination
-     */
+    // スマートコントラクトから外部のアドレスに対してトランザクションを実行するメソッド
     function _call(address target, uint256 value, bytes memory data) internal {
+        // アセンブリを使用してトランザションの実行結果を真偽値で取得
         assembly {
             let success := call(
                 gas(),
@@ -391,6 +340,7 @@ contract SmartAccount is
             )
             let ptr := mload(0x40)
             returndatacopy(ptr, 0, returndatasize())
+            // 失敗していたらエラーメッセージをrevert
             if iszero(success) {
                 revert(ptr, returndatasize())
             }
@@ -408,12 +358,9 @@ contract SmartAccount is
             revert CallerIsNotEntryPointOrSelf(msg.sender);
     }
 
-    /**
-     * @dev This function allows entry point to execute certain actions.
-     * If the caller is not authorized, the function will revert with an error message.
-     * @notice This function acts as modifier and is marked as internal to be be called
-     * within the contract itself only.
-     */
+    // 実行がEntryPointかを確認
+    // ERC4337では、スマートコントラクトが直接外部から呼び出されることを想定していない（UserOp→EntryPoint→SmartAccount）
+    // 常にEntryPoint（EOA）から内部のメソッドが呼び出される
     function _requireFromEntryPoint() internal view {
         if (msg.sender != address(entryPoint()))
             revert CallerIsNotEntryPoint(msg.sender);

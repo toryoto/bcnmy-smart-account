@@ -5,13 +5,10 @@ import {SelfAuthorized} from "../common/SelfAuthorized.sol";
 import {Executor, Enum} from "./Executor.sol";
 import {ModuleManagerErrors} from "../common/Errors.sol";
 
-/**
- * @title Module Manager - A contract that manages modules that can execute transactions
- *        on behalf of the Smart Account via this contract.
- */
- // スマートアカウントに機能を追加するためのモジュール（リカバリーモジュールなど他のコントラクト）の追加、削除、および実行を管理
- // モジュールはリンクリストで管理
- // 根底の仕組みは execTransactionFromModule がモジュール内のメソッドを実行することにあり、その結果として、元のスマートアカウントがそのモジュールのメソッドを実行しているように見える
+// スマートアカウントに機能を追加するためのモジュール（リカバリーモジュールなど他のコントラクト）の追加、削除、および実行を管理
+// モジュールはリンクリストで管理
+// 根底の仕組みは execTransactionFromModuleがモジュール内のメソッドを実行することにあり、その結果として、元のスマートアカウントがそのモジュールのメソッドを実行しているように見える
+// abstractとして定義されているので、直接デプロイされることはなく、他のコントラクト(SmartAccount.sol)が継承してデプロイする
 abstract contract ModuleManager is
     SelfAuthorized,
     Executor,
@@ -86,14 +83,7 @@ abstract contract ModuleManager is
         }
     }
 
-    /**
-     * @dev Allows a Module to execute a Smart Account transaction without any further confirmations.
-     * @param to Destination address of module transaction.
-     * @param value Ether value of module transaction.
-     * @param data Data payload of module transaction.
-     * @param operation Operation type of module transaction.
-     */
-     // 有効化されたモジュール（リンクリストに含まれるモジュール）がスマートアカウントの代わりにトランザクションを実行することを許可するメソッド
+    // 有効化されたモジュール（リンクリストに含まれるモジュール）がスマートアカウントの代わりにトランザクションを実行するメソッド
     function execTransactionFromModule(
         address to,
         uint256 value,
@@ -212,13 +202,7 @@ abstract contract ModuleManager is
         return SENTINEL_MODULES != module && _modules[module] != address(0);
     }
 
-    /**
-     * @dev Adds a module to the allowlist.
-     * @notice This can only be done via a userOp or a selfcall.
-     * @notice Enables the module `module` for the wallet.
-     * @param module Module to be allow-listed.
-     */
-     // モジュールを許可リストに追加する内部関数
+    // モジュールを許可リストに追加する内部関数
     function _enableModule(address module) internal virtual {
         // モジュールアドレスが0またはSENTINEL_MODULES出ないことを確認
         if (module == address(0) || module == SENTINEL_MODULES)
@@ -245,18 +229,11 @@ abstract contract ModuleManager is
         return module;
     }
 
-    /**
-     * @dev Removes a module from the allowlist.
-     * @notice This can only be done via a wallet transaction.
-     * @notice Disables the module `module` for the wallet.
-     * @param prevModule Module that pointed to the module to be removed in the linked list
-     * @param module Module to be removed.
-     */
     function _disableModule(
-        address prevModule,
-        address module
+        address prevModule, // 削除対象の直前のモジュール
+        address module // 削除対処のモジュール
     ) internal virtual {
-        // Validate module address and check that it corresponds to module index.
+        // モジュールアドレスの検証
         if (module == address(0) || module == SENTINEL_MODULES)
             revert ModuleCannotBeZeroOrSentinel(module);
         if (_modules[prevModule] != module)
@@ -265,7 +242,10 @@ abstract contract ModuleManager is
                 _modules[prevModule],
                 prevModule
             );
+        // prevModuleの次のモジュールを、削除対象のmoduleの次のモジュールに更新する
+        // これにより、moduleがリンクリストから切り離される
         _modules[prevModule] = _modules[module];
+        // _modules マッピングから、削除対象の module のエントリを削除
         delete _modules[module];
         emit DisabledModule(module);
     }
