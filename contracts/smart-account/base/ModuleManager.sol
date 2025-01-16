@@ -149,13 +149,8 @@ abstract contract ModuleManager is
         }
     }
 
-    /**
-     * @dev Allows a Module to execute a batch of Smart Account transactions without any further confirmations.
-     * @param to Destination address of module transaction.
-     * @param value Ether value of module transaction.
-     * @param data Data payload of module transaction.
-     * @param operations Operation type of module transaction.
-     */
+    // モジュールがバッチトランザクションを実行するメソッド
+    // ループで1つずつ実行
     function execBatchTransactionFromModule(
         address[] calldata to,
         uint256[] calldata value,
@@ -252,7 +247,7 @@ abstract contract ModuleManager is
 
     // TODO: can use not executor.execute, but SmartAccount._call for the unification
 
-    // バッチトランザクション内で各々を実行するための内部関数
+    // バッチトランザクション内で各々のトランザクションを実行するための内部関数
     // execTransactionFromModuleとやっていることは同じだが、内部関数のため有効性チェックは不要
     function _executeFromModule(
         address to,
